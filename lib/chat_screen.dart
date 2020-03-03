@@ -1,8 +1,11 @@
 import 'package:chat/text_composer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
+
+import 'package:google_sign_in/google_sign_in.dart';
 
 class ChatScreen extends StatefulWidget {
   @override
@@ -10,8 +13,51 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+
+  final GoogleSignIn googleSignIn = GoogleSignIn();
+
+  FirebaseUser _currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Monitora se o usuário é alterado no estado do Widget
+    FirebaseAuth.instance.onAuthStateChanged.listen((user) {
+      _currentUser = user;
+    });
+  }
+
+  // Função para logar o usuario pelo Google
+  Future<FirebaseUser> _getUser() async {
+    // Se o usuario ja estiver logado, apenas retorno o usuário
+    if(_currentUser != null) return _currentUser;
+
+    // Se ainda não existir um usuário logado
+    try {
+      final GoogleSignInAccount googleSignInAccount = await googleSignIn.signIn();
+      final GoogleSignInAuthentication googleSignInAuthentication = await googleSignInAccount.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.getCredential(
+        idToken: googleSignInAuthentication.accessToken, 
+        accessToken: googleSignInAuthentication.accessToken
+      );
+
+      final AuthResult authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+      final FirebaseUser user = authResult.user;
+
+      // Retorna o usuário 
+      return user;
+    } catch (error) {
+      return null;
+    }
+  }
+
   // Função para enviar a mensagem ou imagem
   void _sendMessage({String text, File imgFile}) async {
+
+    final FirebaseUser user = await _getUser();
+
     // Mapa que ia receber a mensagem ou imagem a ser enviada
     Map<String, dynamic> data = {};
 
