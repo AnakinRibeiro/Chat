@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:chat/chat_message.dart';
 import 'dart:io';
 
 import 'package:google_sign_in/google_sign_in.dart';
@@ -13,8 +14,8 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-
   final GoogleSignIn googleSignIn = GoogleSignIn();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   FirebaseUser _currentUser;
 
@@ -30,23 +31,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Função para logar o usuario pelo Google
   Future<FirebaseUser> _getUser() async {
-    // Se o usuario ja estiver logado, apenas retorno o usuário
-    if(_currentUser != null) return _currentUser;
-
-    // Se ainda não existir um usuário logado
+    if (_currentUser != null) return _currentUser;
     try {
-      final GoogleSignInAccount googleSignInAccount = await googleSignIn.signIn();
-      final GoogleSignInAuthentication googleSignInAuthentication = await googleSignInAccount.authentication;
+      final GoogleSignInAccount googleSignInAccount =
+          await googleSignIn.signIn();
+
+      final GoogleSignInAuthentication googleSignInAuthentication =
+          await googleSignInAccount.authentication;
 
       final AuthCredential credential = GoogleAuthProvider.getCredential(
-        idToken: googleSignInAuthentication.accessToken, 
-        accessToken: googleSignInAuthentication.accessToken
-      );
+          idToken: googleSignInAuthentication.idToken,
+          accessToken: googleSignInAuthentication.accessToken);
 
-      final AuthResult authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+      final AuthResult authResult =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
       final FirebaseUser user = authResult.user;
-
-      // Retorna o usuário 
       return user;
     } catch (error) {
       return null;
@@ -55,11 +55,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Função para enviar a mensagem ou imagem
   void _sendMessage({String text, File imgFile}) async {
-
     final FirebaseUser user = await _getUser();
 
+    if (user == null) {
+      _scaffoldKey.currentState.showSnackBar(SnackBar(
+          content: Text("Não foi possível fazer o login. Tente novamente!"),
+          backgroundColor: Colors.red));
+    }
+
     // Mapa que ia receber a mensagem ou imagem a ser enviada
-    Map<String, dynamic> data = {};
+    Map<String, dynamic> data = {
+      "uid": user.uid,
+      "senderName": user.displayName,
+      "senderPhotoUrl": user.photoUrl,
+    };
 
     // Envia a imagem para o Firebase, com a data atual como ID unico
     if (imgFile != null) {
@@ -82,6 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text("Olá"),
         elevation: 0,
@@ -109,15 +119,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
                     // Retorna a lista montada com as mensagens
                     return ListView.builder(
-                      // quantidade de mensagens
-                      itemCount: documents.length,
-                      // mosta as mensagens de baixo para cima
-                      reverse: true,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                            title: Text(documents[index].data['text']));
-                      },
-                    );
+                        // quantidade de mensagens
+                        itemCount: documents.length,
+                        // mosta as mensagens de baixo para cima
+                        reverse: true,
+                        itemBuilder: (context, index) {
+                          // Widget do chat
+                          return ChatMessage(documents[index].data, true);
+                        });
                 }
               },
             ),
